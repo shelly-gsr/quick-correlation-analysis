@@ -1,6 +1,3 @@
-# quick-correlation-analysis
-Small toolkit for fast correlation analysis across numerical features, designed to speed up exploratory data analysis workflows.
-
 # Quick Correlation Analysis
 
 A lightweight Python utility for rapidly computing and visualizing correlations in tabular datasets. Designed to streamline exploratory data analysis by quickly identifying relationships between variables.
@@ -35,17 +32,6 @@ Clone the repository:
 
 git clone https://github.com/shelly-gsr/quick-correlation-analysis.git
 cd quick-correlation-analysis
-
----
-
-## Project Structure
-
-quick-correlation-analysis
-│
-├── correlation_analysis.py   # Core correlation functions
-├── example_data.csv          # Example dataset
-├── requirements.txt
-└── README.md
 
 ---
 
