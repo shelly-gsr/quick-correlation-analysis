@@ -1,0 +1,273 @@
+---
+title: ""
+output: html_document
+---
+
+&nbsp;
+
+<center>
+
+# Correlations
+
+</center>
+
+&nbsp;
+
+----
+
+&nbsp;
+
+## Purpose 
+Enhance your analysis further with
+
+- 1.0 Pearson Correlations
+- 2.0 Lag Correlations
+- 3.0 Correlation Scatterplots (all in one instead of individually generated)
+- 4.0 Correlation Funnels
+
+
+```{r setup, include=FALSE}
+# set working directory to project folder
+root.dir = rprojroot::find_rstudio_root_file()
+setwd(root.dir)
+
+# *************************************************
+# 1.0 Imports ----
+# *************************************************
+# Input libraries
+library(readr) #read csv
+library(readxl) # for retrieving and loading data
+
+# Standard libraries
+library(purrr) # for map_df
+library(dplyr) # for glimpse
+library(psych) # for describe
+library(tidyr) # for gather
+library(stepR) # for formatting data
+library(moments) # for analyzing skewness
+library(anomalize) # for anomaly detection
+
+# Transformation libraries
+library(caret) # for standardization, preprocess
+library(recipes) # for formatting data, creating new variables, onehotencode
+library(lubridate) # for changing char column to date data type
+
+# Modelling libraries
+library(timetk) #time series
+library(tidymodels)
+library(factoextra)
+library(performance)
+library(leaps)
+library(forcats)
+library(tidyquant)
+library(rpart)
+library(rpart.plot)
+
+# Visualization libraries and theme
+library(ggstatsplot) #for correlation matrix
+library(GGally) #for data understanding, scatterplot
+library(ggplot2) #for plots
+library(ggpubr) #stitching plots
+theme_set(theme_pubr())
+
+# *************************************************
+# 2.0 Input & Outputs ----
+# *************************************************
+# clear all variables in work space
+rm(list = ls())
+
+# input
+sample_data_filename = "/Users/shellys/github/cm-mks-ds-starters-correlation/00_data/website_performance_daily.csv"
+
+# *************************************************
+# 3.0 Load Data ----
+# *************************************************
+sample_data_tbl = read_csv(sample_data_filename)
+
+```
+
+&nbsp;
+
+----
+
+&nbsp;
+
+## 1.0 Pearson Correlations {.tabset}
+
+How to read: 
+
+- Blue indicates positive correlation. Red indicates negative correlation.
+- The darker the blue or red showcases the strength of the correlation. 
+- Rule of thumb: Anything +/- 0.30 indicates the two metrics are correlated. Anything below this threshold should not be considered
+
+```{r include=FALSE}
+correlation_matrix_plot <- ggstatsplot::ggcorrmat(pch="",
+  data = sample_data_tbl,
+  type = "parametric", # parametric for Pearson, nonparametric for Spearman's correlation
+  colors = c("darkred", "white", "steelblue") # change default colors
+)
+```
+```{r}
+correlation_matrix_plot
+```
+
+&nbsp;
+
+----
+
+&nbsp;
+
+## 2.0 Lag Correlations {.tabset}
+
+How to read: 
+
+- If point falls between the two dotted blue lines, no correlation.
+- If point falls above or below the dotted blue lines, correlation.
+- Hover over to see the correlation coefficient, if correlation is +/- 0.4 this indicates a mid/strong correlation.
+
+Rule of thumb, Lag 1 (1 month) and 2 (2 month) would be good bets. Lag 6 if you think a 6-month lag is beneficial. And in rare cases Lag 12 if you think a 1-year lag is beneficial.
+
+```{r}
+sample_data_tbl %>%
+  plot_acf_diagnostics(date, leads, 
+                       .ccf_vars = c(spend_paid_search, spend_paid_social, spend_programmatic, spend_email),
+                       .facet_ncol = 2,
+                       .lags = 12)
+```
+
+&nbsp;
+
+----
+
+&nbsp;
+
+
+## 3.0 Correlation Scatterplots {.tabset}
+
+What to look out for:
+
+- Linear relationships would be shown if all points are in a tight diagonal line. If increasing from left to right = positive linear relationship. If decreasing from the left to right = negative linear relationship
+- If the points are all scattered, this is a result of inconclusive linear relationship. Not linear.
+
+```{r include=FALSE}
+scatterplot_correlated_tbl <- sample_data_tbl %>% 
+  select (leads, spend_paid_search, spend_paid_social, spend_programmatic, spend_email)
+correlation_scatter_plot <- scatterplot_correlated_tbl %>% 
+  ggpairs()
+```
+
+```{r}
+correlation_scatter_plot
+```
+
+&nbsp;
+
+----
+
+&nbsp;
+
+## 4.0 Correlation Funnels
+
+Purpose: What happens to the variables when it is high or low. For example when sales are high, is air travel also high? and bank loan rates are low?
+
+### All In {.tabset}
+
+```{r include=FALSE}
+#load correlation script
+root.dir = rprojroot::find_rstudio_root_file()
+corr_script = paste(root.dir, "/00_scripts/plot_cor.R", sep='')
+source(corr_script)
+
+#create recipe for the discretize object
+discretize_obj <- recipe(~ ., data = sample_data_tbl) %>%
+  step_zv(all_predictors()) %>%
+  step_discretize(all_numeric(), options = list(min_unique = 1)) %>%
+  step_dummy(all_nominal(), one_hot = TRUE) %>%
+  prep()
+
+#bake
+dist_tbl <- bake(discretize_obj, new_data = sample_data_tbl)
+
+# write.csv(dist_tbl, file = "binned_distribution_table.csv", row.names = FALSE)
+
+```
+
+#### Sales High
+```{r include=FALSE}
+# Data manipulation.
+correlation_bin4_tbl <- dist_tbl %>%
+  select(-c (date)) %>%
+  get_cor(leads_bin4, fct_reorder = T, fct_rev = T) %>%
+  filter(abs(leads_bin4) >= 0.02) %>%
+  mutate(
+    relationship = case_when(
+      leads_bin4 > 0 ~ "Supports",
+      TRUE ~ "Contradicts"
+    )
+  ) %>%
+  mutate(feature_text = as.character(feature)) %>%
+  separate(feature_text, into = "feature_base", sep = "_", extra = "drop") %>%
+  mutate(feature_base = as_factor(feature_base) %>% fct_rev())
+
+# Visualization of discretized corr. 
+correlation_bin4_plot <- correlation_bin4_tbl %>%
+  ggplot(aes(leads_bin4, feature_base, color = fct_rev(relationship))) +
+  geom_point() +
+  geom_label(aes(label = feature), vjust = -0.5) + 
+  expand_limits(x = c(-0.4, 0.4)) +
+  theme_tq() +
+  scale_color_tq() +
+  labs(
+    title = paste("Correlation Analysis: If Sales is HIGH"),
+    subtitle = "How to read? Top correlated features are in the upper right, they then decrease in order downward (funnel)"
+  )
+```
+```{r}
+correlation_bin4_plot
+```
+
+&nbsp;
+
+----
+
+&nbsp;
+
+#### Sales Low
+```{r include=FALSE}
+# Data manipulation.
+correlation_bin1_tbl <- dist_tbl %>%
+  select(-c (date)) %>%
+  get_cor(leads_bin1, fct_reorder = T, fct_rev = T) %>%
+  filter(abs(leads_bin1) >= 0.02) %>%
+  mutate(
+    relationship = case_when(
+      leads_bin1 > 0 ~ "Supports",
+      TRUE ~ "Contradicts"
+    )
+  ) %>%
+  mutate(feature_text = as.character(feature)) %>%
+  separate(feature_text, into = "feature_base", sep = "_", extra = "drop") %>%
+  mutate(feature_base = as_factor(feature_base) %>% fct_rev())
+
+# Visualization of discretized corr. 
+correlation_bin1_plot <- correlation_bin1_tbl %>%
+  ggplot(aes(leads_bin1, feature_base, color = fct_rev(relationship))) +
+  geom_point() +
+  geom_label(aes(label = feature), vjust = -0.5) + 
+  expand_limits(x = c(-0.4, 0.4)) +
+  theme_tq() +
+  scale_color_tq() +
+  labs(
+    title = paste("Correlation Analysis: If Sales is HIGH"),
+    subtitle = "How to read? Top correlated features are in the upper right, they then decrease in order downward (funnel)"
+  )
+```
+```{r}
+correlation_bin1_plot
+```
+
+&nbsp;
+
+----
+
+&nbsp;
