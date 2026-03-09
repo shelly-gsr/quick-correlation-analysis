@@ -29,9 +29,10 @@ This helps identify candidate features for modeling, detect multicollinearity, a
 ## Installation
 
 Clone the repository:
-
+```
 git clone https://github.com/shelly-gsr/quick-correlation-analysis.git
 cd quick-correlation-analysis
+```
 
 ---
 
